@@ -1,32 +1,77 @@
 import pandas as pd
-import re
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-from sklearn.feature_extraction.text import CountVectorizer
+import spacy
+import pickle
+from nltk.sentiment import SentimentIntensityAnalyzer
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 df = pd.read_csv("data/articles.csv")
 
+# ORG EXTRACTION
+nlp = spacy.load("en_core_web_sm")
+
+docs = nlp.pipe(df["body"].fillna(""), batch_size=20)
+
+orgs_list = []
+for doc in docs:
+    orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
+    orgs_list.append(list(set(orgs)))
+
+df["orgs"] = orgs_list
+
+
+# SENTIMENT
+sia = SentimentIntensityAnalyzer()
+
+def get_sentiment_score(text):
+    return sia.polarity_scores(str(text))["compound"]
+
+df["sentiment"] = df["body"].apply(get_sentiment_score)
+
+
+# TOPIC CLASSIFICATION
+model_clf = pickle.load(open("results/topic_classifier.pkl", "rb"))
+vectorizer = pickle.load(open("results/vectorizer.pkl", "rb"))
+
 def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", "", text)
-    return text
+    return str(text).lower().strip()
 
-stop_words = set(stopwords.words("english"))
-stemmer = PorterStemmer()
+df["clean_body"] = df["body"].apply(clean_text)
 
-def preprocess(text):
-    text = clean_text(text)
-    tokens = word_tokenize(text)
-    tokens = [w for w in tokens if w not in stop_words]
-    tokens = [stemmer.stem(w) for w in tokens]
-    return " ".join(tokens)
+X_vec = vectorizer.transform(df["clean_body"])
+df["topics"] = model_clf.predict(X_vec)
 
 
-def build_features(df):
-    df["clean_body"] = df["body"].apply(preprocess)
+# SCANDAL DETECTION
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    vectorizer = CountVectorizer(max_features=5000)
-    X = vectorizer.fit_transform(df["clean_body"])
+keywords = [
+    "pollution",
+    "oil spill",
+    "deforestation",
+    "environmental disaster",
+    "toxic waste",
+    "climate damage"
+]
 
-    return X, vectorizer, df
+keyword_embeddings = model.encode(keywords)
+
+def scandal_score(text):
+    sentences = str(text).split(".")
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 0]
+
+    sentence_embeddings = model.encode(sentences)
+    similarities = cosine_similarity(sentence_embeddings, keyword_embeddings)
+
+    return similarities.max()
+
+df["scandal_score"] = df["body"].apply(scandal_score)
+
+
+# TOP 10 FLAG
+threshold = df["scandal_score"].nlargest(10).min()
+df["top_10"] = df["scandal_score"] >= threshold
+
+
+# SAVE
+df.to_csv("results/enhanced_news.csv", index=False)
