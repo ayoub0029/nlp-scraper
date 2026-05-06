@@ -11,32 +11,32 @@ df = pd.read_csv("data/articles.csv")
 df = df.dropna(subset=["body"])
 df = df[df["body"].str.len() > 200]
 df["body"] = df["body"].fillna("")
-
+df = df[0:1]
 # ORG EXTRACTION
-nlp = spacy.load("en_core_web_sm")
+# nlp = spacy.load("en_core_web_sm")
 
-docs = nlp.pipe(df["body"], batch_size=20)
+# docs = nlp.pipe(df["body"], batch_size=20)
 
-orgs_list = []
-for doc in docs:
-    orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
-    orgs_list.append(list(set(orgs)))
+# orgs_list = []
+# for doc in docs:
+#     orgs = [ent.text for ent in doc.ents if ent.label_ == "ORG"]
+#     orgs_list.append(list(set(orgs)))
 
-df["orgs"] = orgs_list
+# df["orgs"] = orgs_list
 
 
 # SENTIMENT
-sia = SentimentIntensityAnalyzer()
+# sia = SentimentIntensityAnalyzer()
 
-def get_sentiment_score(text):
-    return sia.polarity_scores(str(text))["compound"]
+# def get_sentiment_score(text):
+#     return sia.polarity_scores(str(text))["compound"]
 
-df["sentiment"] = df["body"].apply(get_sentiment_score)
+# df["sentiment"] = df["body"].apply(get_sentiment_score)
 
 
-# TOPIC CLASSIFICATION
-model = pickle.load(open("results/topic_classifier.pkl", "rb"))
-df["topics"] = model.predict(df["body"])
+# # TOPIC CLASSIFICATION
+# model = pickle.load(open("results/topic_classifier.pkl", "rb"))
+# df["topics"] = model.predict(df["body"])
 
 
 # SCANDAL DETECTION
@@ -62,7 +62,14 @@ def scandal_score(text):
 
     # return similarities.max()
     top_scores = similarities.max(axis=1)
+    print(top_scores)
     top_scores = sorted(top_scores, reverse=True)[:3]
+    print()
+    print(top_scores)
+    print()
+    print(sum(top_scores) / len(top_scores))
+
+
 
     return sum(top_scores) / len(top_scores)
 
@@ -82,7 +89,7 @@ for i, row in df.iterrows():
     orgs = row["orgs"]
     topic = row["topics"]
     sentiment = row["sentiment"]
-    scandal_score = row["scandal_score"]
+    scandal_score_ = row["scandal_score"]
 
     print(f"\nEnriching {url}")
 
@@ -96,7 +103,7 @@ for i, row in df.iterrows():
     print(f"The article has a sentiment of {sentiment}")
 
     print("---------- Scandal detection ----------")
-    print(f"Environmental scandal score: {scandal_score}")
+    print(f"Environmental scandal score: {scandal_score_}")
 
 # SAVE
 df.to_csv("results/enhanced_news.csv", index=False)

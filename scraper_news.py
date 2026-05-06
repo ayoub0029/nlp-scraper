@@ -5,24 +5,6 @@ from bs4 import BeautifulSoup
 import feedparser
 import pandas as pd
 
-# def scrape_article(url):
-#     try:
-#         response = requests.get(url, timeout=10)
-#         soup = BeautifulSoup(response.text, "html.parser")
-
-#         title_tag = soup.find("h1")
-#         if not title_tag:
-#             return None, None
-
-#         title = title_tag.text.strip()
-#         paragraphs = soup.find_all("p")
-#         body = " ".join([p.text for p in paragraphs])
-
-#         return title, body[:500]
-
-#     except:
-#         return None, None
-
 def scrape_article(url):
     try:
         response = requests.get(url, timeout=10)
